@@ -4,16 +4,21 @@ import videoSource from './assets/mov_bbb.mp4'; // 添加此行
 interface DetectionResult {
   time: string;
   flames: number;
-  positions: string[];
+  positions: {
+    left: number; top: number; width: number; height: number;
+  };
 }
 
 function App() {
   const [detectionResults, setDetectionResults] = useState<DetectionResult[]>([]);
+  const [currentFrame, setCurrentFrame] = useState<string>('');
+  console.log("currentFrame: ", currentFrame);
+  
 
   useEffect(() => {
     setDetectionResults([
-      { time: '00:01:23', flames: 3, positions: ['top-left', 'center', 'bottom-right'] },
-      { time: '00:02:45', flames: 1, positions: ['center'] },
+      { time: '00:00:02', flames: 3, positions: {left: 90, top: 0, width: 150, height: 150} },
+      { time: '00:00:08', flames: 1, positions: {left: 20, top: 10, width: 30, height: 40}  },
     ]);
   }, []);
 
@@ -23,7 +28,7 @@ function App() {
 
       <div className="flex-1 flex flex-col space-y-4">
         {/* 第一行 */}
-        <div className="flex-1 grid grid-cols-12 gap-4">
+        <div className="flex-1 max-h-[40vh]] grid grid-cols-12 gap-4">
           {/* 视频区域 */}
           <div className="col-span-4 bg-gray-100 rounded-lg">
             <video src={videoSource} controls className="object-cover rounded-md h-full " />
@@ -34,10 +39,54 @@ function App() {
             <h2 className="text-lg font-semibold mb-3">识别结果</h2>
             <ul className="space-y-2">
               {detectionResults.map((result, index) => (
-                <li key={index} className="text-sm p-2 bg-blue-50 rounded">
+                <li key={index} className="text-sm p-2 bg-blue-50 rounded cursor-pointer"
+                  onClick={() => {
+                    const video = document.querySelector('video') as HTMLVideoElement;
+                    if (video) {
+                      // 将时间字符串转换为秒数
+                      const timeStr = result.time; // 格式: "00:01:23"
+                      const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+                      const timeInSeconds = hours * 3600 + minutes * 60 + seconds;
+                      
+                      // 设置视频时间点
+                      video.currentTime = timeInSeconds;
+                      
+                      // 在视频跳转到指定时间后截取帧并标注位置
+                      const captureFrame = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          // 绘制视频帧
+                          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                          
+                          // 绘制红色边框标注火焰位置
+                          ctx.strokeStyle = 'red';
+                          ctx.lineWidth = 2;
+                          const { left, top, width, height } = result.positions;
+                          
+                          // 绘制红色边框（直接使用positions中的坐标值）
+                          ctx.strokeRect(left, top, width, height);
+                          
+                          // 转换为图片URL
+                          setCurrentFrame(canvas.toDataURL('image/png'));
+                        }
+                      };
+                      
+                      // 监听视频的seeked事件，确保视频已经跳转到指定时间
+                      const handleSeeked = () => {
+                        captureFrame();
+                        video.removeEventListener('seeked', handleSeeked);
+                      };
+                      
+                      video.addEventListener('seeked', handleSeeked);
+                    }
+                  }}
+                >
                   <div>时间: {result.time}</div>
                   <div>数量: {result.flames}</div>
-                  <div>位置: {result.positions.join(', ')}</div>
+                  <div>位置: {JSON.stringify(result.positions)}</div>  
                 </li>
               ))}
             </ul>
@@ -54,15 +103,19 @@ function App() {
         </div>
 
         {/* 第二行 */}
-        <div className="flex-1 grid grid-cols-2 gap-4">
-          <div className="bg-white shadow rounded-lg p-4 flex flex-col">
+        <div className="flex-1 grid grid-cols-12 gap-4 max-h-[40vh]">
+          <div className="col-span-4 bg-white shadow rounded-lg p-4 flex flex-col">
             <h2 className="text-lg font-semibold mb-3">ROI设置</h2>
             <div className="flex-1 bg-gray-100 rounded-md flex items-center justify-center text-gray-500">
-              区域选择画布
+              {currentFrame ? (
+                <img src={currentFrame} alt="当前帧" className="object-contain" />
+              ) : (
+                '区域选择画布'
+              )}
             </div>
           </div>
 
-          <div className="bg-white shadow rounded-lg p-4 flex flex-col">
+          <div className="col-span-8 bg-white shadow rounded-lg p-4 flex flex-col">
             <h2 className="text-lg font-semibold mb-3">ROI分析</h2>
             <div className="flex-1 text-sm space-y-2">
               <div className="flex justify-between">
